@@ -24,3 +24,10 @@ go.work
 test.json
 soloworker_test.yaml
 repoworker_test.yaml
+
+# Files generated during runtime
+repolist.json
+
+# Files related to the VSCode IDE
+.vscode
+
