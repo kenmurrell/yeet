@@ -1,31 +1,32 @@
 package main
 
 import (
-	"os/exec"
-	"log"
 	"bufio"
-	"strings"
 	"encoding/json"
 	"io/ioutil"
+	"log"
+	"os/exec"
+	"strings"
 )
 
 type SoloWorker struct {
-	repolist_filename string
-	codedir string
+	RepolistFilename string
+	CodeDir          string
 }
 
-type Repo struct {
-	Path string
-	Name string 
+// Exported struct (via json)
+type RepoInfo struct {
+	Path string `json:"path"`
+	Name string `json:"name"`
 }
 
 type RepoList struct {
-	RepoList []*Repo
+	RepoList []*RepoInfo
 }
 
-func (worker *SoloWorker) Referesh() {
+func (worker *SoloWorker) Refresh() error {
 	cmd := exec.Command("repo", "list", "-f")
-	cmd.Dir = worker.codedir
+	cmd.Dir = worker.CodeDir
 	stdout, err := cmd.StdoutPipe()
 	rd := bufio.NewReader(stdout)
 	if err != nil {
@@ -35,14 +36,14 @@ func (worker *SoloWorker) Referesh() {
 		log.Fatal(err)
 	}
 
-	var repolist RepoList
+	list := make([]*RepoInfo, 0)
 	line, err := rd.ReadString('\n')
 	for err == nil {
 		chunks := strings.SplitN(line, " : ", 2)
 		p := strings.Trim(chunks[0], " \n\r")
 		n := strings.Trim(chunks[1], " \n\r")
-		repo := Repo{Path: p, Name: n}
-		repolist.RepoList = append(repolist.RepoList, &repo)
+		repoInfo := RepoInfo{Path: p, Name: n}
+		list = append(list, &repoInfo)
 		line, err = rd.ReadString('\n')
 	}
 
@@ -50,15 +51,25 @@ func (worker *SoloWorker) Referesh() {
 		log.Fatal(err)
 	}
 
-	jsontext, err := json.MarshalIndent(&repolist, "", "\t")
-	_ = ioutil.WriteFile(worker.repolist_filename, jsontext, 0644)
+	repoList := RepoList{list}
+	jsontext, _ := json.MarshalIndent(&repoList, "", "\t")
+	if err := ioutil.WriteFile(worker.RepolistFilename, jsontext, 0644); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (worker *SoloWorker) GetList() *RepoList {
-	file, _ := ioutil.ReadFile(worker.repolist_filename)
- 
+func (worker *SoloWorker) GetList() (*RepoList, error) {
+	file, err := ioutil.ReadFile(worker.RepolistFilename)
+	if err != nil {
+		return nil, err
+	}
+
 	repolist := RepoList{}
- 
-	_ = json.Unmarshal([]byte(file), &repolist)
-	return &repolist
+
+	err = json.Unmarshal([]byte(file), &repolist)
+	if err != nil {
+		return nil, err
+	}
+	return &repolist, nil
 }
