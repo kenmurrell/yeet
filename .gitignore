@@ -19,3 +19,8 @@
 
 # Go workspace file
 go.work
+
+# Files generated during testing
+test.json
+soloworker_test.yaml
+repoworker_test.yaml

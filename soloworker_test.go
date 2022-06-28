@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type SoloWorker_Test struct {
+type SoloWorker_Test_Config struct {
 	Test1 struct {
 		CodePath string `yaml:"codepath"`
 		MinSize  int    `yaml:"min_size"`
@@ -16,13 +16,13 @@ type SoloWorker_Test struct {
 	}
 }
 
-func load() *SoloWorker_Test {
+func loadSoloWorker_config() *SoloWorker_Test_Config {
 	yamlFile, err := ioutil.ReadFile("soloworker_test.yaml")
 	if err != nil {
 		panic(err)
 	}
 
-	var config SoloWorker_Test
+	var config SoloWorker_Test_Config
 	err = yaml.Unmarshal(yamlFile, &config)
 	if err != nil {
 		panic(err)
@@ -30,8 +30,8 @@ func load() *SoloWorker_Test {
 	return &config
 }
 
-func Test1(t *testing.T) {
-	config := load().Test1
+func TestSoloWorker1(t *testing.T) {
+	config := loadSoloWorker_config().Test1
 	w := SoloWorker{"test.json", config.CodePath}
 	err := w.Refresh()
 	if err != nil {

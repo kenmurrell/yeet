@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"strings"
 )
 
 type RepoWorker struct {
 	RepoInfo *RepoInfo
 	Branch   string
-	Remotes  *[]string
+	Remotes  []string
 }
 
 type RepoWorkerInitializer struct {
@@ -34,16 +35,16 @@ func (init *RepoWorkerInitializer) CurrentBranch() string {
 	if err := cmd.Start(); err != nil {
 		log.Fatal(err)
 	}
-
 	// Make a custom decoder for each of these
-	branch, err := rd.ReadString('\n')
+	branch, _ := rd.ReadString('\n')
 	if err := cmd.Wait(); err != nil {
 		log.Fatal(err)
 	}
+	branch = strings.Trim(branch, " \n\r")
 	return branch
 }
 
-func (init *RepoWorkerInitializer) Remotes() *[]string {
+func (init *RepoWorkerInitializer) Remotes() []string {
 	cmd := exec.Command("git", "remote")
 	cmd.Dir = init.RepoInfo.Path
 	stdout, err := cmd.StdoutPipe()
@@ -54,18 +55,18 @@ func (init *RepoWorkerInitializer) Remotes() *[]string {
 	if err := cmd.Start(); err != nil {
 		log.Fatal(err)
 	}
-
 	remotes := make([]string, 0)
 	// Make a custom decoder for each of these
 	r, err := rd.ReadString('\n')
 	for err == nil {
+		r = strings.Trim(r, " \n\r")
 		remotes = append(remotes, r)
 		r, err = rd.ReadString('\n')
 	}
 	if err := cmd.Wait(); err != nil {
 		log.Fatal(err)
 	}
-	return &remotes
+	return remotes
 }
 
 func (w *RepoWorker) Update() {
