@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/TwiN/go-color"
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
 )
@@ -13,6 +14,12 @@ type ProgramConfig struct {
 	MasterBranch string `yaml:"masterbranch"`
 	FCRemote     string `yaml:"fcr"`
 	RepoDir      string `yaml:"repodir"`
+}
+
+type WorkFlowResult struct {
+	RepoName string
+	Success  bool
+	Message  string
 }
 
 var config *ProgramConfig
@@ -41,8 +48,9 @@ func setup() {
 }
 
 func run(target string) {
+	fmt.Printf("Checking out all " + color.InYellow(target) + " branches...\n")
 	start := time.Now()
-	done := make(chan string)
+	done := make(chan *WorkFlowResult)
 	defer close(done)
 	var n int = len(repolist.RepoList)
 	for _, r := range repolist.RepoList {
@@ -51,18 +59,25 @@ func run(target string) {
 	fmt.Printf("Started %d processes...\n", n)
 
 	for i := 0; i < n; i++ {
-		fmt.Println(<-done)
+		result := <-done
+		fmt.Printf("%s: ", result.RepoName)
+		if result.Success {
+			fmt.Printf(color.InGreen("PASSED"))
+		} else {
+			fmt.Printf(color.InRed("FAILED"))
+		}
+		fmt.Printf(", %s\n", result.Message)
 	}
 
 	elapsed := time.Since(start)
 	fmt.Printf("Done, took %s", elapsed)
 }
 
-func workflow(target string, r *RepoInfo, done chan<- string) {
+func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 	init := RepoWorkerInitializer{r}
 	rw := init.NewRepoWorker()
 	// Stash current changes on branch
-	rw.Stash()
+	_ = rw.Stash()
 	// Select remote
 	remotes := rw.Remotes
 	var remote string
@@ -71,57 +86,82 @@ func workflow(target string, r *RepoInfo, done chan<- string) {
 	} else if slices.Contains(remotes, config.FCRemote) {
 		remote = config.FCRemote
 	} else {
-		done <- r.Name + ": failed...no suitable remote found"
+		done <- &WorkFlowResult{r.Name, false, "Correct remote not found"}
+		return
 	}
 
 	// Update info from the correct remote
 	// Avoiding updating from all remotes here to save time
-	rw.Update(remote)
-	// Choose the correct remote
+	err := rw.Update(remote)
+	if err != nil {
+		done <- &WorkFlowResult{r.Name, false, "Error performing remote update: " + err.Error()}
+		return
+	}
+
+	// TODO: create a workflow for when target = masterbranch
 
 	// Choose the correct branch
 	branches, _ := rw.ListBranches()
 	targetName := remote + "/" + target
+	//if the repo is already on the target branch
 	if rw.Branch == target {
 		// TODO: call these through goroutines at the same time
 		localHash, _ := rw.RevParse("HEAD")
 		remoteHash, _ := rw.RevParse(targetName)
-		if localHash != remoteHash {
+		if localHash == remoteHash {
+			done <- &WorkFlowResult{r.Name, true, ""}
+		} else {
 			err := rw.Rebase(config.MasterBranch, remote)
 			if err != nil {
-				done <- r.Name + ": FAILED"
+				done <- &WorkFlowResult{r.Name, false, "Error performing rebase: " + err.Error()}
 			}
-			done <- r.Name + ": " + rw.Branch + " -> " + remoteHash
-		} else {
-			done <- r.Name + ": " + rw.Branch
+			done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("%s -> %s", localHash, remoteHash)}
 		}
-	} else if slices.Contains(branches, targetName) {
+		return
+	}
+	//if the repo is on another branch but has access to the target branch
+	if slices.Contains(branches, targetName) {
 		branch := rw.Branch
 		err := rw.Checkout(target, remote)
 		if err != nil {
-			done <- r.Name + ": FAILED"
+			done <- &WorkFlowResult{r.Name, false, "Error performing checkout: " + err.Error()}
 		}
 		err = rw.Rebase(config.MasterBranch, remote)
 		if err != nil {
-			done <- r.Name + ": FAILED"
+			done <- &WorkFlowResult{r.Name, false, "Error performing rebase: " + err.Error()}
+			return
 		}
-		done <- r.Name + ": " + branch + " -> " + rw.Branch
-	} else if rw.Branch == config.MasterBranch {
+		done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("%s -> %s", branch, rw.Branch)}
+		return
+	}
+	//if the repo is on the master branch and has no access to the target branch
+	if rw.Branch == config.MasterBranch {
 		// TODO: call these through goroutines at the same time
-		localHash, _ := rw.RevParse("HEAD")
-		remoteHash, _ := rw.RevParse(targetName)
-		if localHash != remoteHash {
+		remoteBranch := remote + "/" + config.MasterBranch
+		localHash, lerr := rw.RevParse("HEAD")
+		remoteHash, rerr := rw.RevParse(remoteBranch)
+		if lerr != nil || rerr != nil {
+			done <- &WorkFlowResult{r.Name, false, "Error performing rev-parse: " + err.Error()}
+			return
+		}
+
+		if localHash == remoteHash {
+			done <- &WorkFlowResult{r.Name, true, ""}
+		} else {
 			err := rw.Rebase(config.MasterBranch, remote)
 			if err != nil {
-				done <- r.Name + ": FAILED"
+				done <- &WorkFlowResult{r.Name, false, "Error performing rebase: " + err.Error()}
+				return
 			}
-			done <- r.Name + ": " + rw.Branch + " -> " + remoteHash
-		} else {
-			done <- ""
+			done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("%s -> %s", localHash, remoteHash)}
 		}
-	} else {
-		branch := rw.Branch
-		_ = rw.Checkout(config.MasterBranch, remote)
-		done <- r.Name + ": " + branch + " -> " + rw.Branch
+		return
 	}
+	//if the repo is on another branch and has noa ccess ot the target branch
+	branch := rw.Branch
+	err = rw.Checkout(config.MasterBranch, remote)
+	if err != nil {
+		done <- &WorkFlowResult{r.Name, false, "Error performing checkout: " + err.Error()}
+	}
+	done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("%s -> %s", branch, rw.Branch)}
 }

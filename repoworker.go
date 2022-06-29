@@ -78,6 +78,7 @@ func (w *RepoWorker) Update(remotes ...string) error {
 	return err
 }
 
+// TODO: Remove the log.Fatal here for better logging
 func (w *RepoWorker) RevParse(object string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--short", object)
 	cmd.Dir = w.RepoInfo.Path
@@ -90,9 +91,6 @@ func (w *RepoWorker) RevParse(object string) (string, error) {
 		log.Fatal(err)
 	}
 	hash, _ := rd.ReadString('\n')
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
-	}
 	hash = strings.Trim(hash, " \n\r")
 	return hash, nil
 
@@ -106,6 +104,7 @@ func (w *RepoWorker) Stash() error {
 	return err
 }
 
+// TODO: Remove the log.Fatal here for better logging
 func (w *RepoWorker) ListBranches() ([]string, error) {
 	cmd := exec.Command("git", "branch", "-r", "-l")
 	cmd.Dir = w.RepoInfo.Path
@@ -138,7 +137,7 @@ func (w *RepoWorker) Rebase(targetBranch string, targetRemote string) error {
 	output, err := cmd.Output()
 	if err != nil {
 		msg := w.RepoInfo.Name + ": " + string(output)
-		log.Println(msg)
+		log.Println(msg) // TODO:  replace this with better logging, maybe a cli --debug flag?
 		cmd2 := exec.Command("git", "rebase", "--abort")
 		cmd2.Dir = cmd.Dir
 		cmd2.Run()
