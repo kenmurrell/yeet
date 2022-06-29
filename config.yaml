@@ -1,0 +1,10 @@
+---
+# the master branch; the branch to rebase on when checking out a new remote branch 
+masterbranch: 
+
+# the first choice remote; the remote to default to when multiple remotes are found
+fcr: 
+
+# the repo directory
+repodir: 
+...
