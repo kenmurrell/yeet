@@ -69,11 +69,33 @@ func (init *RepoWorkerInitializer) Remotes() []string {
 	return remotes
 }
 
-func (w *RepoWorker) Update() error {
-	cmd := exec.Command("git", "branch", "--show-current")
+func (w *RepoWorker) Update(remotes ...string) error {
+	args := []string{"remote", "update"}
+	args = append(args, remotes...)
+	cmd := exec.Command("git", args...)
 	cmd.Dir = w.RepoInfo.Path
 	err := cmd.Run()
 	return err
+}
+
+func (w *RepoWorker) RevParse(object string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", object)
+	cmd.Dir = w.RepoInfo.Path
+	stdout, err := cmd.StdoutPipe()
+	rd := bufio.NewReader(stdout)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		log.Fatal(err)
+	}
+	hash, _ := rd.ReadString('\n')
+	if err := cmd.Wait(); err != nil {
+		log.Fatal(err)
+	}
+	hash = strings.Trim(hash, " \n\r")
+	return hash, nil
+
 }
 
 func (w *RepoWorker) Stash() error {
@@ -119,8 +141,16 @@ func (w *RepoWorker) Rebase(targetBranch string, targetRemote string) error {
 	targetRemoteBranch := targetRemote + "/" + targetBranch
 	cmd := exec.Command("git", "rebase", targetRemoteBranch)
 	cmd.Dir = w.RepoInfo.Path
-	err := cmd.Run()
-	return err
+	output, err := cmd.Output()
+	if err != nil {
+		msg := w.RepoInfo.Name + ": " + string(output)
+		log.Println(msg)
+		cmd2 := exec.Command("git", "rebase", "--abort")
+		cmd2.Dir = cmd.Dir
+		cmd2.Run()
+		return err
+	}
+	return nil
 }
 
 func (w *RepoWorker) Checkout(targetBranch string, targetRemote string) error {
@@ -129,8 +159,14 @@ func (w *RepoWorker) Checkout(targetBranch string, targetRemote string) error {
 	// The --track flag force
 	cmd := exec.Command("git", "checkout", "-B", targetBranch, "--track", targetRemoteBranch)
 	cmd.Dir = w.RepoInfo.Path
-	err := cmd.Run()
-	return err
+	output, err := cmd.Output()
+	if err != nil {
+		msg := w.RepoInfo.Name + ": " + string(output)
+		log.Println(msg)
+		return err
+	}
+	w.Branch = targetBranch
+	return nil
 }
 
 func (w *RepoWorker) Print() {

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"time"
 
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
@@ -40,6 +41,7 @@ func setup() {
 }
 
 func run(target string) {
+	start := time.Now()
 	done := make(chan string)
 	defer close(done)
 	var n int = len(repolist.RepoList)
@@ -52,6 +54,8 @@ func run(target string) {
 		fmt.Println(<-done)
 	}
 
+	elapsed := time.Since(start)
+	fmt.Printf("Done, took %s", elapsed)
 }
 
 func workflow(target string, r *RepoInfo, done chan<- string) {
@@ -59,9 +63,7 @@ func workflow(target string, r *RepoInfo, done chan<- string) {
 	rw := init.NewRepoWorker()
 	// Stash current changes on branch
 	rw.Stash()
-	// Update info from all remotes
-	rw.Update()
-	// Choose the correct remote
+	// Select remote
 	remotes := rw.Remotes
 	var remote string
 	if len(remotes) == 1 {
@@ -71,22 +73,55 @@ func workflow(target string, r *RepoInfo, done chan<- string) {
 	} else {
 		done <- r.Name + ": failed...no suitable remote found"
 	}
+
+	// Update info from the correct remote
+	// Avoiding updating from all remotes here to save time
+	rw.Update(remote)
+	// Choose the correct remote
+
 	// Choose the correct branch
 	branches, _ := rw.ListBranches()
 	targetName := remote + "/" + target
-	if slices.Contains(branches, targetName) {
-		rw.Checkout(target, remote)
-		rw.Rebase(config.MasterBranch, remote)
-		done <- targetName + " -> " + r.Name
+	if rw.Branch == target {
+		// TODO: call these through goroutines at the same time
+		localHash, _ := rw.RevParse("HEAD")
+		remoteHash, _ := rw.RevParse(targetName)
+		if localHash != remoteHash {
+			err := rw.Rebase(config.MasterBranch, remote)
+			if err != nil {
+				done <- r.Name + ": FAILED"
+			}
+			done <- r.Name + ": " + rw.Branch + " -> " + remoteHash
+		} else {
+			done <- r.Name + ": " + rw.Branch
+		}
+	} else if slices.Contains(branches, targetName) {
+		branch := rw.Branch
+		err := rw.Checkout(target, remote)
+		if err != nil {
+			done <- r.Name + ": FAILED"
+		}
+		err = rw.Rebase(config.MasterBranch, remote)
+		if err != nil {
+			done <- r.Name + ": FAILED"
+		}
+		done <- r.Name + ": " + branch + " -> " + rw.Branch
 	} else if rw.Branch == config.MasterBranch {
-		// do nothing. Git pull maybe?
-		rw.Rebase(config.MasterBranch, remote)
-		done <- config.MasterBranch + " == " + r.Name
-		return
+		// TODO: call these through goroutines at the same time
+		localHash, _ := rw.RevParse("HEAD")
+		remoteHash, _ := rw.RevParse(targetName)
+		if localHash != remoteHash {
+			err := rw.Rebase(config.MasterBranch, remote)
+			if err != nil {
+				done <- r.Name + ": FAILED"
+			}
+			done <- r.Name + ": " + rw.Branch + " -> " + remoteHash
+		} else {
+			done <- ""
+		}
 	} else {
-		rw.Checkout(config.MasterBranch, remote)
-		done <- config.MasterBranch + " -> " + r.Name
+		branch := rw.Branch
+		_ = rw.Checkout(config.MasterBranch, remote)
+		done <- r.Name + ": " + branch + " -> " + rw.Branch
 	}
-
-	done <- r.Name + ": done!"
 }
