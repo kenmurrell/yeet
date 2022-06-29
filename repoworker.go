@@ -79,7 +79,7 @@ func (w *RepoWorker) Update(remotes ...string) error {
 }
 
 func (w *RepoWorker) RevParse(object string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", object)
+	cmd := exec.Command("git", "rev-parse", "--short", object)
 	cmd.Dir = w.RepoInfo.Path
 	stdout, err := cmd.StdoutPipe()
 	rd := bufio.NewReader(stdout)
@@ -98,15 +98,9 @@ func (w *RepoWorker) RevParse(object string) (string, error) {
 
 }
 
+//TODO: This will often return errors if there are no items to stash
 func (w *RepoWorker) Stash() error {
 	cmd := exec.Command("git", "stash", "--include-untracked")
-	cmd.Dir = w.RepoInfo.Path
-	err := cmd.Run()
-	return err
-}
-
-func (w *RepoWorker) Unstash() error {
-	cmd := exec.Command("git", "stash", "pop")
 	cmd.Dir = w.RepoInfo.Path
 	err := cmd.Run()
 	return err
