@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/TwiN/go-color"
+	"github.com/briandowns/spinner"
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
 )
@@ -62,24 +63,38 @@ func run(target string) {
 	done := make(chan *WorkFlowResult)
 	defer close(done)
 	var n int = len(repolist.RepoList)
+	stop := make(chan bool)
+	defer close(stop)
+	go func() {
+		fmt.Printf("  Started %d processess...", n)
+		s := spinner.New(spinner.CharSets[9], 100*time.Millisecond)
+		s.Start()
+		if <-stop {
+			s.Stop()
+		}
+		return
+	}()
+
 	for _, r := range repolist.RepoList {
 		go workflow(target, r, done)
 	}
-	fmt.Printf("Started %d processes...\n", n)
 
 	for i := 0; i < n; i++ {
 		result := <-done
-		fmt.Printf("%s: ", result.RepoName)
+		if i == 0 {
+			stop <- true
+		}
+		fmt.Printf("\n%s: ", result.RepoName)
 		if result.Success {
 			fmt.Printf(color.InGreen("PASSED"))
 		} else {
 			fmt.Printf(color.InRed("FAILED"))
 		}
-		fmt.Printf(" %s\n", result.Message)
+		fmt.Printf(" %s", result.Message)
 	}
 
 	elapsed := time.Since(start)
-	fmt.Printf("Done, took %s", elapsed)
+	fmt.Printf("\nDone, took %s", elapsed)
 }
 
 func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
