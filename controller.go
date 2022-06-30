@@ -27,6 +27,7 @@ type WorkFlowResult struct {
 
 var config *ProgramConfig
 var repolist *RepoList
+var maximumprocessors int = 4
 
 var RepolistFilename string = "repolist.json"
 
@@ -71,7 +72,8 @@ func refresh() {
 }
 
 func run(target string) {
-	numCPUs := strconv.Itoa(runtime.NumCPU())
+	runtime.GOMAXPROCS(maximumprocessors)
+	numCPUs := strconv.Itoa(maximumprocessors)
 	fmt.Printf("Checking out any %s branches using %s CPUs...\n", color.InYellow(target), color.InYellow(numCPUs))
 	start := time.Now()
 	done := make(chan *WorkFlowResult)
