@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"time"
 
 	"github.com/TwiN/go-color"
@@ -31,12 +32,15 @@ func loadconfig() *ProgramConfig {
 	var tempconfig ProgramConfig
 	yamlFile, err := ioutil.ReadFile("config.yaml")
 	if err != nil {
-		panic(err)
+		log.Fatalln("The config.yaml file is missing!", err)
 	}
 
 	err = yaml.Unmarshal(yamlFile, &tempconfig)
 	if err != nil {
 		panic(err)
+	}
+	if tempconfig.FCRemote == "" || tempconfig.RepoDir == "" || tempconfig.MasterBranch == "" {
+		log.Fatalln("The config.yaml is missing values!")
 	}
 	return &tempconfig
 }
@@ -44,7 +48,12 @@ func loadconfig() *ProgramConfig {
 func setup() {
 	config = loadconfig()
 	sw := SoloWorker{RepolistFilename, config.RepoDir}
-	repolist, _ = sw.GetList()
+	r, err := sw.GetList()
+	if err != nil {
+		msg := fmt.Sprintf("Error loading %s, you may need to run `yeet refresh` first?", RepolistFilename)
+		log.Fatalln(msg)
+	}
+	repolist = r
 }
 
 func refresh() {
@@ -54,6 +63,9 @@ func refresh() {
 	if err != nil {
 		panic(err)
 	}
+	r, _ := sw.GetList()
+	n := len(r.RepoList)
+	fmt.Printf("Loaded %d repositories into %s.", n, RepolistFilename)
 }
 
 func run(target string) {
