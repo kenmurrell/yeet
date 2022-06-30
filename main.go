@@ -8,20 +8,34 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+// Globally available within the package. Set via the --debug,-d flag
+var debugMode bool = false
+
 func main() {
 	const APP_NAME string = "yeet"
 	const APP_USAGE string = "Rapidly switch between multi-repo branches"
+
+	flags := []cli.Flag{
+		&cli.BoolFlag{
+			Name:        "debug",
+			Aliases:     []string{"d"},
+			Usage:       "Set to print debugging information",
+			Destination: &debugMode,
+		},
+	}
 
 	commands := []*cli.Command{
 		{
 			Name:   "refresh",
 			Usage:  "Refresh repository list",
-			Action: refreshAction,
+			Action: entryPoint,
+			Flags:  flags,
 		},
 		{
 			Name:   "rebase",
 			Usage:  "Rebase target branch onto the tip of main on all repos",
-			Action: rebaseAction,
+			Action: entryPoint,
+			Flags:  flags,
 		},
 	}
 
@@ -38,7 +52,19 @@ func main() {
 }
 
 func entryPoint(cCtx *cli.Context) error {
-	fmt.Println("Cool functionality pending...")
+	if debugMode {
+		fmt.Println("Running with debug ENABLED")
+	}
+
+	switch cCtx.Command.FullName() {
+	case "refresh":
+		refreshAction(cCtx)
+	case "rebase":
+		rebaseAction(cCtx)
+	default:
+		cli.ShowAppHelp(cCtx)
+	}
+
 	return nil
 }
 

@@ -165,7 +165,7 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 		}
 		return
 	}
-	//if the repo is on another branch and has noa ccess ot the target branch
+	//if the repo is on another branch and has no access to the target branch
 	branch := rw.Branch
 	err = rw.Checkout(config.MasterBranch, remote)
 	if err != nil {
