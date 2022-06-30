@@ -75,7 +75,7 @@ func run(target string) {
 		} else {
 			fmt.Printf(color.InRed("FAILED"))
 		}
-		fmt.Printf(", %s\n", result.Message)
+		fmt.Printf(" %s\n", result.Message)
 	}
 
 	elapsed := time.Since(start)
@@ -109,28 +109,27 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 
 	// TODO: create a workflow for when target = masterbranch
 
-	// Choose the correct branch
-	branches, _ := rw.ListBranches()
 	targetName := remote + "/" + target
 	//if the repo is already on the target branch
 	if rw.Branch == target {
-		// TODO: call these through goroutines at the same time
-		localHash, _ := rw.RevParse("HEAD")
-		remoteHash, _ := rw.RevParse(targetName)
-		if localHash == remoteHash {
-			done <- &WorkFlowResult{r.Name, true, ""}
+		err := rw.Rebase(config.MasterBranch, remote)
+		if err != nil {
+			done <- &WorkFlowResult{r.Name, false, "Error performing rebase: " + err.Error()}
 		} else {
-			err := rw.Rebase(config.MasterBranch, remote)
-			if err != nil {
-				done <- &WorkFlowResult{r.Name, false, "Error performing rebase: " + err.Error()}
-			}
-			done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("%s -> %s", localHash, remoteHash)}
+			localHash, _ := rw.RevParse("HEAD")
+			done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("%s ", localHash)}
 		}
 		return
 	}
+
+	// Choose the correct branch
+	branches, _ := rw.ListBranches()
 	//if the repo is on another branch but has access to the target branch
 	if slices.Contains(branches, targetName) {
 		branch := rw.Branch
+		if branch == "" {
+			branch = "DETACHED_HEAD"
+		}
 		err := rw.Checkout(target, remote)
 		if err != nil {
 			done <- &WorkFlowResult{r.Name, false, "Error performing checkout: " + err.Error()}
