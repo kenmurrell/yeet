@@ -38,6 +38,9 @@ func (worker *SoloWorker) Refresh() error {
 
 	list := make([]*RepoInfo, 0)
 	line, err := rd.ReadString('\n')
+	if err != nil {
+		log.Fatal("Error performing 'repo list', no entries found.", err)
+	}
 	for err == nil {
 		chunks := strings.SplitN(line, " : ", 2)
 		p := strings.Trim(chunks[0], " \n\r")
