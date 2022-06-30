@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/TwiN/go-color"
@@ -69,7 +71,8 @@ func refresh() {
 }
 
 func run(target string) {
-	fmt.Printf("Checking out all " + color.InYellow(target) + " branches...\n")
+	numCPUs := strconv.Itoa(runtime.NumCPU())
+	fmt.Printf("Checking out any %s branches using %s CPUs...\n", color.InYellow(target), color.InYellow(numCPUs))
 	start := time.Now()
 	done := make(chan *WorkFlowResult)
 	defer close(done)
