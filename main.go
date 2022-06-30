@@ -48,7 +48,7 @@ func refreshAction(cCtx *cli.Context) error {
 		return nil
 	}
 
-	fmt.Println("TODO: Perform refresh here")
+	refresh()
 
 	return nil
 }
@@ -61,7 +61,8 @@ func rebaseAction(cCtx *cli.Context) error {
 
 	branchName := cCtx.Args().Get(0)
 
-	fmt.Printf("TODO: Perform rebase here with branch %s\n", branchName)
+	setup()
+	run(branchName)
 
 	return nil
 }

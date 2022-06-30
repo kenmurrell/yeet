@@ -47,6 +47,15 @@ func setup() {
 	repolist, _ = sw.GetList()
 }
 
+func refresh() {
+	config = loadconfig()
+	sw := SoloWorker{RepolistFilename, config.RepoDir}
+	err := sw.Refresh()
+	if err != nil {
+		panic(err)
+	}
+}
+
 func run(target string) {
 	fmt.Printf("Checking out all " + color.InYellow(target) + " branches...\n")
 	start := time.Now()

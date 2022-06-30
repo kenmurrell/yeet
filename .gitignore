@@ -31,3 +31,6 @@ repolist.json
 # Files related to the VSCode IDE
 .vscode
 
+# Configuration file (don't track after template checked in)
+config.yaml
+
