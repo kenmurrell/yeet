@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"time"
@@ -32,12 +34,13 @@ var GOMAXPROCS int = 1
 var RepolistFilename string = "repolist.json"
 
 func loadconfig() *ProgramConfig {
-	var tempconfig ProgramConfig
-	yamlFile, err := ioutil.ReadFile("config.yaml")
+	ex, _ := os.Executable()
+	configPath := filepath.Join(filepath.Dir(ex), "config.yaml")
+	yamlFile, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		log.Fatalln("The config.yaml file is missing!", err)
 	}
-
+	var tempconfig ProgramConfig
 	err = yaml.Unmarshal(yamlFile, &tempconfig)
 	if err != nil {
 		panic(err)
@@ -50,7 +53,9 @@ func loadconfig() *ProgramConfig {
 
 func setup() {
 	config = loadconfig()
-	sw := SoloWorker{RepolistFilename, config.RepoDir}
+	ex, _ := os.Executable()
+	repoListPath := filepath.Join(filepath.Dir(ex), RepolistFilename)
+	sw := SoloWorker{repoListPath, config.RepoDir}
 	r, err := sw.GetList()
 	if err != nil {
 		msg := fmt.Sprintf("Error loading %s, you may need to run `yeet refresh` first?", RepolistFilename)
@@ -61,14 +66,16 @@ func setup() {
 
 func refresh() {
 	config = loadconfig()
-	sw := SoloWorker{RepolistFilename, config.RepoDir}
+	ex, _ := os.Executable()
+	repoListPath := filepath.Join(filepath.Dir(ex), RepolistFilename)
+	sw := SoloWorker{repoListPath, config.RepoDir}
 	err := sw.Refresh()
 	if err != nil {
 		panic(err)
 	}
 	r, _ := sw.GetList()
 	n := len(r.RepoList)
-	fmt.Printf("Loaded %d repositories into %s.", n, RepolistFilename)
+	fmt.Printf("Loaded %d repositories into %s.", n, repoListPath)
 }
 
 func run(target string) {
