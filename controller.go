@@ -133,7 +133,6 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 
 	// TODO: create a workflow for when target = masterbranch
 
-	targetName := remote + "/" + target
 	//if the repo is already on the target branch
 	if rw.Branch == target {
 		err := rw.Rebase(config.MasterBranch, remote)
@@ -141,20 +140,21 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 			done <- &WorkFlowResult{r.Name, false, "Error performing rebase: " + err.Error()}
 		} else {
 			localHash, _ := rw.RevParse("HEAD")
-			done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("[%s]: [%s] ", rw.Branch, localHash)}
+			done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("[%s]: [%s]", rw.Branch, localHash)}
 		}
 		return
 	}
 
 	// Choose the correct branch
 	branches, _ := rw.ListBranches()
+	remoteTarget := fmt.Sprintf("remotes/%s/%s", remote, target)
 	//if the repo is on another branch but has access to the target branch
-	if slices.Contains(branches, targetName) {
+	if slices.Contains(branches, remoteTarget) {
 		branch := rw.Branch
 		if branch == "" {
 			branch = "DETACHED_HEAD"
 		}
-		err := rw.Checkout(target, remote)
+		err := rw.CheckoutRemote(target, remote)
 		if err != nil {
 			done <- &WorkFlowResult{r.Name, false, "Error performing checkout: " + err.Error()}
 		}
@@ -162,6 +162,17 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 		if err != nil {
 			done <- &WorkFlowResult{r.Name, false, "Error performing rebase: " + err.Error()}
 			return
+		}
+		done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("[%s] -> [%s]", branch, rw.Branch)}
+		return
+	} else if slices.Contains(branches, target) {
+		branch := rw.Branch
+		if branch == "" {
+			branch = "DETACHED_HEAD"
+		}
+		err := rw.CheckoutLocal(target, remote)
+		if err != nil {
+			done <- &WorkFlowResult{r.Name, false, "Error performing checkout: " + err.Error()}
 		}
 		done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("[%s] -> [%s]", branch, rw.Branch)}
 		return
@@ -178,7 +189,7 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 		}
 
 		if localHash == remoteHash {
-			done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("[%s]", rw.Branch)}
+			done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("[%s]: [%s]", rw.Branch, localHash)}
 		} else {
 			err := rw.Rebase(config.MasterBranch, remote)
 			if err != nil {
@@ -191,7 +202,10 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 	}
 	//if the repo is on another branch and has no access to the target branch
 	branch := rw.Branch
-	err = rw.Checkout(config.MasterBranch, remote)
+	if branch == "" {
+		branch = "DETACHED_HEAD"
+	}
+	err = rw.CheckoutRemote(config.MasterBranch, remote)
 	if err != nil {
 		done <- &WorkFlowResult{r.Name, false, "Error performing checkout: " + err.Error()}
 	}

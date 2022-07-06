@@ -106,7 +106,7 @@ func (w *RepoWorker) Stash() error {
 
 // TODO: Remove the log.Fatal here for better logging
 func (w *RepoWorker) ListBranches() ([]string, error) {
-	cmd := exec.Command("git", "branch", "-r", "-l")
+	cmd := exec.Command("git", "branch", "-a", "-l")
 	cmd.Dir = w.RepoInfo.Path
 	stdout, err := cmd.StdoutPipe()
 	rd := bufio.NewReader(stdout)
@@ -146,11 +146,24 @@ func (w *RepoWorker) Rebase(targetBranch string, targetRemote string) error {
 	return nil
 }
 
-func (w *RepoWorker) Checkout(targetBranch string, targetRemote string) error {
+func (w *RepoWorker) CheckoutRemote(targetBranch string, targetRemote string) error {
 	targetRemoteBranch := targetRemote + "/" + targetBranch
 	// The -B flag force creates a new branch if one already exists
 	// The --track flag force
 	cmd := exec.Command("git", "checkout", "-B", targetBranch, "--track", targetRemoteBranch)
+	cmd.Dir = w.RepoInfo.Path
+	output, err := cmd.Output()
+	if err != nil {
+		msg := w.RepoInfo.Name + ": " + string(output)
+		log.Println(msg)
+		return err
+	}
+	w.Branch = targetBranch
+	return nil
+}
+
+func (w *RepoWorker) CheckoutLocal(targetBranch string, targetRemote string) error {
+	cmd := exec.Command("git", "checkout", targetBranch)
 	cmd.Dir = w.RepoInfo.Path
 	output, err := cmd.Output()
 	if err != nil {
