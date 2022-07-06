@@ -80,7 +80,7 @@ func (w *RepoWorker) Update(remotes ...string) error {
 
 // TODO: Remove the log.Fatal here for better logging
 func (w *RepoWorker) RevParse(object string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--short", object)
+	cmd := exec.Command("git", "rev-parse", "--short=4", object)
 	cmd.Dir = w.RepoInfo.Path
 	stdout, err := cmd.StdoutPipe()
 	rd := bufio.NewReader(stdout)

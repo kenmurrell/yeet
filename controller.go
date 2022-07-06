@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/TwiN/go-color"
@@ -93,13 +94,7 @@ func run(target string) {
 
 	for i := 0; i < n; i++ {
 		result := <-done
-		fmt.Printf("%s: ", result.RepoName)
-		if result.Success {
-			fmt.Printf(color.InGreen("PASSED"))
-		} else {
-			fmt.Printf(color.InRed("FAILED"))
-		}
-		fmt.Printf(" %s\n", result.Message)
+		fmt.Print(result.Format())
 	}
 
 	elapsed := time.Since(start)
@@ -210,4 +205,20 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 		done <- &WorkFlowResult{r.Name, false, "Error performing checkout: " + err.Error()}
 	}
 	done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("[%s] -> [%s]", branch, rw.Branch)}
+}
+
+func (r *WorkFlowResult) Format() string {
+	var filler strings.Builder
+	var fillerlen = 31 - len(r.Message)
+	for i := 0; i < fillerlen; i++ {
+		filler.WriteString(" ")
+	}
+
+	var status string
+	if r.Success {
+		status = color.InGreen("PASSED")
+	} else {
+		status = color.InRed("FAILED")
+	}
+	return fmt.Sprintf(" %s %s%s%s\n", status, r.Message, filler.String(), r.RepoName)
 }
