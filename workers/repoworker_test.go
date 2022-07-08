@@ -1,9 +1,10 @@
-package main
+package workers_test
 
 import (
 	"io/ioutil"
 	"reflect"
 	"testing"
+	workers "yeet/workers"
 
 	"gopkg.in/yaml.v3"
 )
@@ -32,8 +33,8 @@ func loadRepoWorker_config() *RepoWorker_Test_Config {
 
 func TestRepoWorker1(t *testing.T) {
 	config := loadRepoWorker_config().Test1
-	repoInfo := RepoInfo{config.SampleRepoPath, config.SampleRepoName}
-	init := RepoWorkerInitializer{&repoInfo}
+	repoInfo := workers.RepoInfo{config.SampleRepoPath, config.SampleRepoName}
+	init := workers.RepoWorkerInitializer{&repoInfo}
 	rw := init.NewRepoWorker()
 	if rw.Branch == "" {
 		t.Fatalf(`Repo worker has no branch`)
