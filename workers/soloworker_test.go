@@ -1,9 +1,10 @@
-package main
+package workers_test
 
 import (
 	"io/ioutil"
 	"os"
 	"testing"
+	workers "yeet/workers"
 
 	"gopkg.in/yaml.v3"
 )
@@ -32,7 +33,7 @@ func loadSoloWorker_config() *SoloWorker_Test_Config {
 
 func TestSoloWorker1(t *testing.T) {
 	config := loadSoloWorker_config().Test1
-	w := SoloWorker{"test.json", config.CodePath}
+	w := workers.SoloWorker{"test.json", config.CodePath}
 	err := w.Refresh()
 	if err != nil {
 		t.Fatalf(`Error refreshing repo list: %v`, err)

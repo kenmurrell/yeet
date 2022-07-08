@@ -1,4 +1,4 @@
-package main
+package workers
 
 import (
 	"fmt"
@@ -52,7 +52,7 @@ func loadconfig() *ProgramConfig {
 	return &tempconfig
 }
 
-func setup() {
+func SetupCmd() {
 	config = loadconfig()
 	ex, _ := os.Executable()
 	repoListPath := filepath.Join(filepath.Dir(ex), RepolistFilename)
@@ -65,7 +65,7 @@ func setup() {
 	repolist = r
 }
 
-func refresh() {
+func RefreshCmd() {
 	config = loadconfig()
 	ex, _ := os.Executable()
 	repoListPath := filepath.Join(filepath.Dir(ex), RepolistFilename)
@@ -79,7 +79,7 @@ func refresh() {
 	fmt.Printf("Loaded %d repositories into %s.", n, repoListPath)
 }
 
-func run(target string) {
+func RebaseCmd(target string) {
 	runtime.GOMAXPROCS(GOMAXPROCS)
 	numCPUs := strconv.Itoa(GOMAXPROCS)
 	fmt.Printf("Checking out any %s branches using %s CPUs...\n", color.InYellow(target), color.InYellow(numCPUs))
