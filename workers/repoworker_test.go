@@ -17,29 +17,33 @@ type RepoWorker_Test_Config struct {
 	}
 }
 
-func loadRepoWorker_config() *RepoWorker_Test_Config {
+func loadRepoWorker_config() (*RepoWorker_Test_Config, error) {
 	yamlFile, err := ioutil.ReadFile("repoworker_test.yaml")
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	var config RepoWorker_Test_Config
 	err = yaml.Unmarshal(yamlFile, &config)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return &config
+	return &config, nil
 }
 
 func TestRepoWorker1(t *testing.T) {
-	config := loadRepoWorker_config().Test1
-	repoInfo := workers.RepoInfo{config.SampleRepoPath, config.SampleRepoName}
+	config, err := loadRepoWorker_config()
+	if err != nil {
+		t.Skip("No config file available, skipping")
+	}
+	config1 := config.Test1
+	repoInfo := workers.RepoInfo{config1.SampleRepoPath, config1.SampleRepoName}
 	init := workers.RepoWorkerInitializer{&repoInfo}
 	rw := init.NewRepoWorker()
 	if rw.Branch == "" {
 		t.Fatalf(`Repo worker has no branch`)
 	}
-	if !reflect.DeepEqual(rw.Remotes, config.Remotes) {
+	if !reflect.DeepEqual(rw.Remotes, config1.Remotes) {
 		t.Fatalf(`Repo worker has remote name mismatch`)
 	}
 }
