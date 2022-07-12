@@ -30,7 +30,7 @@ type WorkFlowResult struct {
 
 var config *ProgramConfig
 var repolist *RepoList
-var GOMAXPROCS int = 1
+var GOMAXPROCS int = 4
 
 var RepolistFilename string = "repolist.json"
 
