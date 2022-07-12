@@ -2,6 +2,8 @@ package workers_test
 
 import (
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	workers "yeet/workers"
@@ -31,7 +33,7 @@ func loadRepoWorker_config() (*RepoWorker_Test_Config, error) {
 	return &config, nil
 }
 
-func TestRepoWorker1(t *testing.T) {
+func TestRepoWorkerInit_Private(t *testing.T) {
 	config, err := loadRepoWorker_config()
 	if err != nil {
 		t.Skip("No config file available, skipping")
@@ -44,6 +46,23 @@ func TestRepoWorker1(t *testing.T) {
 		t.Fatalf(`Repo worker has no branch`)
 	}
 	if !reflect.DeepEqual(rw.Remotes, config1.Remotes) {
+		t.Fatalf(`Repo worker has remote name mismatch`)
+	}
+}
+
+func TestRepoWorkerInit(t *testing.T) {
+	currentPath, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	repoPath := filepath.Dir(currentPath)
+	repoInfo := workers.RepoInfo{repoPath, "test"}
+	init := workers.RepoWorkerInitializer{&repoInfo}
+	rw := init.NewRepoWorker()
+	if rw.Branch != "main" {
+		t.Fatalf(`Repo worker has no branch`)
+	}
+	if len(rw.Remotes) != 1 || rw.Remotes[0] != "origin" {
 		t.Fatalf(`Repo worker has remote name mismatch`)
 	}
 }

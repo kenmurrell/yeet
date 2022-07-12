@@ -31,7 +31,7 @@ func loadSoloWorker_config() (*SoloWorker_Test_Config, error) {
 	return &config, nil
 }
 
-func TestSoloWorker1(t *testing.T) {
+func TestSoloWorkerInit_Private(t *testing.T) {
 	config, err := loadSoloWorker_config()
 	if err != nil {
 		t.Skip("No config file available, skipping")

@@ -165,7 +165,7 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 		if branch == "" {
 			branch = "DETACHED_HEAD"
 		}
-		err := rw.CheckoutLocal(target, remote)
+		err := rw.CheckoutLocal(target)
 		if err != nil {
 			done <- &WorkFlowResult{r.Name, false, "Error performing checkout: " + err.Error()}
 		}

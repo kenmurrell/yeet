@@ -3,6 +3,7 @@ package workers
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os/exec"
@@ -33,13 +34,14 @@ func (worker *SoloWorker) Refresh() error {
 		log.Fatal(err)
 	}
 	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	list := make([]*RepoInfo, 0)
 	line, err := rd.ReadString('\n')
 	if err != nil {
-		log.Fatal("Error performing 'repo list', no entries found.", err)
+		fmt.Printf("Error performing 'repo list', no entries found.\n")
+		return err
 	}
 	for err == nil {
 		chunks := strings.SplitN(line, " : ", 2)
@@ -51,7 +53,7 @@ func (worker *SoloWorker) Refresh() error {
 	}
 
 	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	repoList := RepoList{list}
