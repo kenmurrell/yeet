@@ -91,7 +91,7 @@ func (w *RepoWorker) ListBranches() ([]string, error) {
 }
 
 // TODO: allow this to only take one argument
-func (w *RepoWorker) Rebase(targetBranch string, targetRemote string) error {
+func (w *RepoWorker) Rebase(targetBranch string, targetRemote string) (bool, error) {
 	if targetRemote != "" {
 		targetBranch = targetRemote + "/" + targetBranch
 	}
@@ -100,18 +100,17 @@ func (w *RepoWorker) Rebase(targetBranch string, targetRemote string) error {
 	cmd := GitCommand{args, w.RepoInfo.Path}
 	result := cmd.Run()
 	if result.Passed {
-		return nil
+		return true, nil
 	} else if result.ErrorCode == 1 {
-		fmt.Printf("%s rebase found merge conflicts, aborting...\n", w.RepoInfo.Name)
 		abortArgs := []string{"rebase", "--abort"}
 		abortCmd := GitCommand{abortArgs, w.RepoInfo.Path}
 		abortResult := abortCmd.Run()
 		if abortResult.Passed {
-			return nil //TODO: add custom error type to return here
+			return false, nil
 		}
-		return fmt.Errorf("%s failed with ErrorCode %d: %v", abortCmd.Print(), abortResult.ErrorCode, result.Output)
+		return false, fmt.Errorf("%s failed with ErrorCode %d: %v", abortCmd.Print(), abortResult.ErrorCode, result.Output)
 	}
-	return fmt.Errorf("%s failed with ErrorCode %d: %v", cmd.Print(), result.ErrorCode, result.Output)
+	return false, fmt.Errorf("%s failed with ErrorCode %d: %v", cmd.Print(), result.ErrorCode, result.Output)
 }
 
 func (w *RepoWorker) CheckoutRemote(targetBranch string, targetRemote string) error {

@@ -16,6 +16,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	PASSED = iota
+	FAILED = iota
+	CNFLCT = iota
+)
+
 type ProgramConfig struct {
 	MasterBranch string `yaml:"masterbranch"`
 	FCRemote     string `yaml:"fcr"`
@@ -23,9 +29,9 @@ type ProgramConfig struct {
 }
 
 type WorkFlowResult struct {
-	RepoName string
-	Success  bool
-	Message  string
+	RepoName    string
+	SuccessCode int
+	Message     string
 }
 
 var config *ProgramConfig
@@ -114,7 +120,7 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 	} else if slices.Contains(remotes, config.FCRemote) {
 		remote = config.FCRemote
 	} else {
-		done <- &WorkFlowResult{r.Name, false, "Correct remote not found"}
+		done <- &WorkFlowResult{r.Name, FAILED, "Correct remote not found"}
 		return
 	}
 
@@ -122,20 +128,20 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 	// Avoiding updating from all remotes here to save time
 	err := rw.Update(remote)
 	if err != nil {
-		done <- &WorkFlowResult{r.Name, false, "Error performing remote update: " + err.Error()}
+		done <- &WorkFlowResult{r.Name, FAILED, "Error performing remote update: " + err.Error()}
 		return
 	}
 
-	// TODO: create a workflow for when target = masterbranch
-
 	//if the repo is already on the target branch
 	if rw.Branch == target {
-		err := rw.Rebase(config.MasterBranch, remote)
+		success, err := rw.Rebase(config.MasterBranch, remote)
+		localHash, _ := rw.RevParse("HEAD")
 		if err != nil {
-			done <- &WorkFlowResult{r.Name, false, "Error performing rebase: " + err.Error()}
+			done <- &WorkFlowResult{r.Name, FAILED, "Error performing rebase: " + err.Error()}
+		} else if !success {
+			done <- &WorkFlowResult{r.Name, CNFLCT, fmt.Sprintf("[%s]: [%s]", rw.Branch, localHash)}
 		} else {
-			localHash, _ := rw.RevParse("HEAD")
-			done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("[%s]: [%s]", rw.Branch, localHash)}
+			done <- &WorkFlowResult{r.Name, PASSED, fmt.Sprintf("[%s]: [%s]", rw.Branch, localHash)}
 		}
 		return
 	}
@@ -151,14 +157,16 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 		}
 		err := rw.CheckoutRemote(target, remote)
 		if err != nil {
-			done <- &WorkFlowResult{r.Name, false, "Error performing checkout: " + err.Error()}
+			done <- &WorkFlowResult{r.Name, FAILED, "Error performing checkout: " + err.Error()}
 		}
-		err = rw.Rebase(config.MasterBranch, remote)
+		success, err := rw.Rebase(config.MasterBranch, remote)
 		if err != nil {
-			done <- &WorkFlowResult{r.Name, false, "Error performing rebase: " + err.Error()}
-			return
+			done <- &WorkFlowResult{r.Name, FAILED, "Error performing rebase: " + err.Error()}
+		} else if !success {
+			done <- &WorkFlowResult{r.Name, CNFLCT, fmt.Sprintf("[%s] -> [%s]", branch, rw.Branch)}
+		} else {
+			done <- &WorkFlowResult{r.Name, PASSED, fmt.Sprintf("[%s] -> [%s]", branch, rw.Branch)}
 		}
-		done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("[%s] -> [%s]", branch, rw.Branch)}
 		return
 	} else if slices.Contains(branches, target) {
 		branch := rw.Branch
@@ -167,9 +175,9 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 		}
 		err := rw.CheckoutLocal(target)
 		if err != nil {
-			done <- &WorkFlowResult{r.Name, false, "Error performing checkout: " + err.Error()}
+			done <- &WorkFlowResult{r.Name, FAILED, "Error performing checkout: " + err.Error()}
 		}
-		done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("[%s] -> [%s]", branch, rw.Branch)}
+		done <- &WorkFlowResult{r.Name, PASSED, fmt.Sprintf("[%s] -> [%s]", branch, rw.Branch)}
 		return
 	}
 	//if the repo is on the master branch and has no access to the target branch
@@ -179,19 +187,21 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 		localHash, lerr := rw.RevParse("HEAD")
 		remoteHash, rerr := rw.RevParse(remoteBranch)
 		if lerr != nil || rerr != nil {
-			done <- &WorkFlowResult{r.Name, false, "Error performing rev-parse: " + err.Error()}
+			done <- &WorkFlowResult{r.Name, FAILED, "Error performing rev-parse: " + err.Error()}
 			return
 		}
 
 		if localHash == remoteHash {
-			done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("[%s]: [%s]", rw.Branch, localHash)}
+			done <- &WorkFlowResult{r.Name, PASSED, fmt.Sprintf("[%s]: [%s]", rw.Branch, localHash)}
 		} else {
-			err := rw.Rebase(config.MasterBranch, remote)
+			success, err := rw.Rebase(config.MasterBranch, remote)
 			if err != nil {
-				done <- &WorkFlowResult{r.Name, false, "Error performing rebase: " + err.Error()}
-				return
+				done <- &WorkFlowResult{r.Name, FAILED, "Error performing rebase: " + err.Error()}
+			} else if !success {
+				done <- &WorkFlowResult{r.Name, CNFLCT, fmt.Sprintf("[%s]: [%s] -> [%s]", rw.Branch, localHash, remoteHash)}
+			} else {
+				done <- &WorkFlowResult{r.Name, PASSED, fmt.Sprintf("[%s]: [%s] -> [%s]", rw.Branch, localHash, remoteHash)}
 			}
-			done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("[%s]: [%s] -> [%s]", rw.Branch, localHash, remoteHash)}
 		}
 		return
 	}
@@ -202,9 +212,9 @@ func workflow(target string, r *RepoInfo, done chan<- *WorkFlowResult) {
 	}
 	err = rw.CheckoutRemote(config.MasterBranch, remote)
 	if err != nil {
-		done <- &WorkFlowResult{r.Name, false, "Error performing checkout: " + err.Error()}
+		done <- &WorkFlowResult{r.Name, FAILED, "Error performing checkout: " + err.Error()}
 	}
-	done <- &WorkFlowResult{r.Name, true, fmt.Sprintf("[%s] -> [%s]", branch, rw.Branch)}
+	done <- &WorkFlowResult{r.Name, PASSED, fmt.Sprintf("[%s] -> [%s]", branch, rw.Branch)}
 }
 
 func (r *WorkFlowResult) Format() string {
@@ -215,10 +225,13 @@ func (r *WorkFlowResult) Format() string {
 	}
 
 	var status string
-	if r.Success {
+	switch r.SuccessCode {
+	case PASSED:
 		status = color.InGreen("PASSED")
-	} else {
+	case FAILED:
 		status = color.InRed("FAILED")
+	case CNFLCT:
+		status = color.InYellow("CNFLCT")
 	}
 	return fmt.Sprintf(" %s %s%s%s\n", status, r.Message, filler.String(), r.RepoName)
 }
