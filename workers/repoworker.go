@@ -60,8 +60,19 @@ func (w *RepoWorker) Update(remotes ...string) error {
 	return fmt.Errorf("%s failed with ErrorCode %d", cmd.Print(), result.ErrorCode)
 }
 
-func (w *RepoWorker) RevParse(object string) (string, error) {
+func (w *RepoWorker) RevParseObject(object string) (string, error) {
 	args := []string{"rev-parse", "--short=4", object}
+	cmd := GitCommand{args, w.RepoInfo.Path}
+	result := cmd.Run()
+	if result.Passed && len(result.Output) == 1 {
+		return result.Output[0], nil
+	}
+	return "", fmt.Errorf("%s failed with ErrorCode %d", cmd.Print(), result.ErrorCode)
+}
+
+func (w *RepoWorker) RevParseUpstream(branch string) (string, error) {
+
+	args := []string{"rev-parse", "--short=4", branch + "@{upstream}"}
 	cmd := GitCommand{args, w.RepoInfo.Path}
 	result := cmd.Run()
 	if result.Passed && len(result.Output) == 1 {
@@ -80,7 +91,7 @@ func (w *RepoWorker) Stash() error {
 	return fmt.Errorf("%s failed with ErrorCode %d", cmd.Print(), result.ErrorCode)
 }
 
-func (w *RepoWorker) ListBranches() ([]string, error) {
+func (w *RepoWorker) BranchList() ([]string, error) {
 	args := []string{"branch", "-a", "-l"}
 	cmd := GitCommand{args, w.RepoInfo.Path}
 	result := cmd.Run()
@@ -100,12 +111,7 @@ func (w *RepoWorker) StatusBranch() ([]string, error) {
 	return nil, fmt.Errorf("%s failed with ErrorCode %d", cmd.Print(), result.ErrorCode)
 }
 
-// TODO: allow this to only take one argument
-func (w *RepoWorker) Rebase(targetBranch string, targetRemote string) (bool, error) {
-	if targetRemote != "" {
-		targetBranch = targetRemote + "/" + targetBranch
-	}
-
+func (w *RepoWorker) Rebase(targetBranch string) (bool, error) {
 	args := []string{"rebase", targetBranch}
 	cmd := GitCommand{args, w.RepoInfo.Path}
 	result := cmd.Run()
