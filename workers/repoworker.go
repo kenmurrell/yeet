@@ -34,7 +34,7 @@ func (init *RepoWorkerInitializer) CurrentBranch() (string, error) {
 		if len(result.Output) == 1 {
 			return result.Output[0], nil
 		}
-		return "", fmt.Errorf("%s failed to find the current branch\n", cmd.Print())
+		return "", fmt.Errorf("%s failed to find the current branch", cmd.Print())
 	}
 	return "", fmt.Errorf("%s failed with ErrorCode %d", cmd.Print(), result.ErrorCode)
 }
@@ -82,6 +82,16 @@ func (w *RepoWorker) Stash() error {
 
 func (w *RepoWorker) ListBranches() ([]string, error) {
 	args := []string{"branch", "-a", "-l"}
+	cmd := GitCommand{args, w.RepoInfo.Path}
+	result := cmd.Run()
+	if result.Passed {
+		return result.Output, nil
+	}
+	return nil, fmt.Errorf("%s failed with ErrorCode %d", cmd.Print(), result.ErrorCode)
+}
+
+func (w *RepoWorker) StatusBranch() ([]string, error) {
+	args := []string{"status", "-b", "--porcelain"}
 	cmd := GitCommand{args, w.RepoInfo.Path}
 	result := cmd.Run()
 	if result.Passed {

@@ -38,12 +38,20 @@ func (ycli *yCLI) run() {
 			Description: "Generates a list of repos across which to perform the target rebase and saves the results to repolist.json. Uses the `repo list` command.",
 		},
 		{
-			Name:        "rebase",
-			Usage:       "Rebase target branch onto the tip of main across all repos",
+			Name:        "take",
+			Usage:       "Checkout and rebase target branch onto the tip of main across all repos",
 			Action:      entryPoint,
 			Flags:       flags,
-			UsageText:   "yeet rebase <targetbranch>",
+			UsageText:   "yeet take <targetbranch>",
 			Description: "Rebases origin/<targetbranch> onto the tip of origin/main across all repos. All repositories that do not have the branch origin/<targetbranch> are updated to the tip of origin/main. repolist.json must exist.",
+		},
+		{
+			Name:        "status",
+			Usage:       "Check the status of all repos",
+			Action:      entryPoint,
+			Flags:       flags,
+			UsageText:   "yeet status",
+			Description: "Checks the status of the current branch of every repo by checking the local and remote commit hashes.",
 		},
 	}
 
@@ -67,8 +75,10 @@ func entryPoint(cCtx *cli.Context) error {
 	switch cCtx.Command.FullName() {
 	case "refresh":
 		refreshAction(cCtx)
-	case "rebase":
-		rebaseAction(cCtx)
+	case "take":
+		takeAction(cCtx)
+	case "status":
+		statusAction(cCtx)
 	default:
 		cli.ShowAppHelp(cCtx)
 	}
@@ -87,16 +97,28 @@ func refreshAction(cCtx *cli.Context) error {
 	return nil
 }
 
-func rebaseAction(cCtx *cli.Context) error {
+func takeAction(cCtx *cli.Context) error {
 	if cCtx.NArg() != 1 {
-		fmt.Printf("Rebase takes 1 argument, got %d\n", cCtx.NArg())
+		fmt.Printf("Take needs 1 argument, got %d\n", cCtx.NArg())
 		return nil
 	}
 
 	branchName := cCtx.Args().Get(0)
 
 	workers.SetupCmd()
-	workers.RebaseCmd(branchName)
+	workers.TakeCmd(branchName)
+
+	return nil
+}
+
+func statusAction(cCtx *cli.Context) error {
+	if cCtx.NArg() > 0 {
+		fmt.Printf("Take needs no arguments")
+		return nil
+	}
+
+	workers.SetupCmd()
+	workers.StatusCmd()
 
 	return nil
 }

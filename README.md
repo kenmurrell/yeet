@@ -26,7 +26,7 @@
 - The name of the remote you would prefer to check out from if not "origin"
 - The directory containing all repositories maintained by your repo tool
 
-Before running the `rebase` command, ensure this config file has been filled in correctly.
+Before running the `take` command, ensure this config file has been filled in correctly.
 
 ### Commands
 
@@ -38,10 +38,10 @@ $ yeet refresh
 
 Before you can use `yeet` to perform a rebase, you need a list of the repositories across which to rebase the target branch and their remote addresses. The `refresh` command collects this information via the `repo list` command and saves the information to *repolist.json*.
 
-#### rebase
+#### take
 
 ```
-$ yeet rebase <targetbranch>
+$ yeet take <targetbranch>
 ```
 
 Bring all repositories up to the tip of the main branch and create a new branch `<targetbranch>` by rebasing `origin/<targetbranch>` onto the tip of main in those repos where `origin/<targetbranch>` exists
