@@ -1,5 +1,5 @@
 # yeet
- A repo-tool wrapper written in Go. `yeet` lets you quickly switch between changesets that exist across multiple repositories within your repo-tool manifest.
+ A repo-tool wrapper written in Go. `yeet` lets you quickly switch and update branches across multiple git repositories simultaneously.
 
  ## Overview
  `yeet` simplifies the process of checking out and rebasing similarly-named remote branches across multiple repositories that are managed using the repo tool (https://gerrit.googlesource.com/git-repo/).
@@ -22,8 +22,8 @@
 ### Config File
 
 `yeet` uses a YAML config file to specify some additional pieces of information, including:
-- The name of your main (production) branch
-- The name of the remote you would prefer to check out from if not "origin"
+- The name of your main (production/development) branch
+- The name of the preferred remote, if you have multiple remotes
 - The directory containing all repositories maintained by your repo tool
 
 Before running the `take` command, ensure this config file has been filled in correctly.
@@ -38,10 +38,18 @@ $ yeet refresh
 
 Before you can use `yeet` to perform a rebase, you need a list of the repositories across which to rebase the target branch and their remote addresses. The `refresh` command collects this information via the `repo list` command and saves the information to *repolist.json*.
 
+#### status
+
+```
+$ yeet status
+```
+
+Shows the current branch name and the HEAD commit hash of every repository. Shows differences in between the local and remote HEAD for each repository.
+
 #### take
 
 ```
 $ yeet take <targetbranch>
 ```
 
-Bring all repositories up to the tip of the main branch and create a new branch `<targetbranch>` by rebasing `origin/<targetbranch>` onto the tip of main in those repos where `origin/<targetbranch>` exists
+Bring all repositories up to the tip of the main branch and create a new branch `<targetbranch>` by rebasing `<remote>/<targetbranch>` onto the tip of main in those repos where `<remote>/<targetbranch>` exists
