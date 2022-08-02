@@ -14,16 +14,16 @@ type RepoWorkerInitializer struct {
 	RepoInfo *RepoInfo
 }
 
-func (init *RepoWorkerInitializer) NewRepoWorker() *RepoWorker {
+func (init *RepoWorkerInitializer) NewRepoWorker() (*RepoWorker, error) {
 	branch, err := init.CurrentBranch()
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("(%s): %s", init.RepoInfo.Name, err)
 	}
 	remotes, err := init.Remotes()
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("(%s): %s", init.RepoInfo.Name, err)
 	}
-	return &RepoWorker{init.RepoInfo, branch, remotes}
+	return &RepoWorker{init.RepoInfo, branch, remotes}, nil
 }
 
 func (init *RepoWorkerInitializer) CurrentBranch() (string, error) {
@@ -34,7 +34,7 @@ func (init *RepoWorkerInitializer) CurrentBranch() (string, error) {
 		if len(result.Output) == 1 {
 			return result.Output[0], nil
 		}
-		return "", fmt.Errorf("%s failed to find the current branch", cmd.Print())
+		return "DETACHED_HEAD", nil
 	}
 	return "", fmt.Errorf("%s failed with ErrorCode %d", cmd.Print(), result.ErrorCode)
 }

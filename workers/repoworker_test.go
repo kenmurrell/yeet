@@ -41,7 +41,10 @@ func TestRepoWorkerInit_Private(t *testing.T) {
 	config1 := config.Test1
 	repoInfo := workers.RepoInfo{config1.SampleRepoPath, config1.SampleRepoName}
 	init := workers.RepoWorkerInitializer{&repoInfo}
-	rw := init.NewRepoWorker()
+	rw, err := init.NewRepoWorker()
+	if err != nil {
+		t.Fatalf(`Error creating worker`)
+	}
 	if rw.Branch == "" {
 		t.Fatalf(`Repo worker has no branch`)
 	}
@@ -58,7 +61,10 @@ func TestRepoWorkerInit(t *testing.T) {
 	repoPath := filepath.Dir(currentPath)
 	repoInfo := workers.RepoInfo{repoPath, "test"}
 	init := workers.RepoWorkerInitializer{&repoInfo}
-	rw := init.NewRepoWorker()
+	rw, err := init.NewRepoWorker()
+	if err != nil {
+		t.Fatalf(`Error creating worker`)
+	}
 	if rw.Branch != "main" {
 		t.Fatalf(`Repo worker has no branch`)
 	}
