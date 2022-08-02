@@ -8,7 +8,10 @@ import (
 )
 
 func statusWorkflow(init *RepoWorkerInitializer, done chan<- *WorkFlowResult) {
-	rw := init.NewRepoWorker()
+	rw, err := init.NewRepoWorker()
+	if err != nil {
+		panic(err)
+	}
 	remotes := rw.Remotes
 	var remote string
 	if len(remotes) == 1 {
@@ -19,7 +22,7 @@ func statusWorkflow(init *RepoWorkerInitializer, done chan<- *WorkFlowResult) {
 		done <- &WorkFlowResult{rw.RepoInfo.Name, FAILED, "Correct remote not found"}
 		return
 	}
-	err := rw.Update(remote)
+	err = rw.Update(remote)
 	if err != nil {
 		done <- &WorkFlowResult{rw.RepoInfo.Name, FAILED, "Error performing remote update: " + err.Error()}
 		return
@@ -61,7 +64,10 @@ func statusWorkflow(init *RepoWorkerInitializer, done chan<- *WorkFlowResult) {
 }
 
 func takeWorkflow(target string, init *RepoWorkerInitializer, done chan<- *WorkFlowResult) {
-	rw := init.NewRepoWorker()
+	rw, err := init.NewRepoWorker()
+	if err != nil {
+		panic(err)
+	}
 	// Stash current changes on branch
 	_ = rw.Stash()
 	// Select remote
@@ -79,7 +85,6 @@ func takeWorkflow(target string, init *RepoWorkerInitializer, done chan<- *WorkF
 	var localHash string
 	var remoteHash string
 	var branches []string
-	var err error
 	remoteTarget := fmt.Sprintf("%s/%s", remote, config.MasterBranch)
 	fmtRemoteTarget := fmt.Sprintf("remotes/%s/%s", remote, target)
 	remoteMasterBranch := fmt.Sprintf("%s/%s", remote, config.MasterBranch)
