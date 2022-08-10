@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/TwiN/go-color"
@@ -27,6 +28,11 @@ type WorkFlowResult struct {
 	Message  string
 }
 
+type SearchResult struct {
+	RepoName string
+	Target   string
+}
+
 type Status struct {
 	text  string
 	color string
@@ -35,6 +41,20 @@ type Status struct {
 
 func (s *Status) ToString() string {
 	return s.color + s.text + color.Reset
+}
+
+func (r *WorkFlowResult) Format() string {
+	var filler strings.Builder
+	var fillerlen = 45 - len(r.Message)
+	for i := 0; i < fillerlen; i++ {
+		filler.WriteString(".")
+	}
+
+	return fmt.Sprintf(" %s %s%s%s\n", r.Status.ToString(), r.Message, filler.String(), r.RepoName)
+}
+
+func (s *SearchResult) ToString() string {
+	return color.Yellow + s.RepoName + color.Reset + ": " + color.Green + s.Target + color.Reset
 }
 
 var PASSED Status = Status{"PASSED", color.Green, 0}
@@ -140,12 +160,35 @@ func StatusCmd() {
 	fmt.Printf("Done, took %s", elapsed)
 }
 
-func (r *WorkFlowResult) Format() string {
-	var filler strings.Builder
-	var fillerlen = 45 - len(r.Message)
-	for i := 0; i < fillerlen; i++ {
-		filler.WriteString(".")
+func FindCmd(target string) {
+	runtime.GOMAXPROCS(GOMAXPROCS)
+	numCPUs := strconv.Itoa(GOMAXPROCS)
+	fmt.Printf("Searching for branch %s using %s CPUs...\n", color.InYellow(target), color.InYellow(numCPUs))
+	start := time.Now()
+	found := false
+	nameChan := make(chan *SearchResult)
+	wg := sync.WaitGroup{}
+	for _, r := range repolist.RepoList {
+		wg.Add(1)
+		init := &RepoWorkerInitializer{r}
+		go findWorkflow(target, init, nameChan, &wg)
+	}
+	fmt.Printf("Started %d processes...\n", len(repolist.RepoList))
+
+	go func() {
+		wg.Wait()
+		close(nameChan)
+	}()
+
+	for name := range nameChan {
+		found = true
+		fmt.Println(name.ToString())
 	}
 
-	return fmt.Sprintf(" %s %s%s%s\n", r.Status.ToString(), r.Message, filler.String(), r.RepoName)
+	if !found {
+		fmt.Printf("Nothing found for %s\n", target)
+	}
+
+	elapsed := time.Since(start)
+	fmt.Printf("Done, took %s", elapsed)
 }

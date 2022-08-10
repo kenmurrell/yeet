@@ -2,6 +2,8 @@ package workers
 
 import (
 	"fmt"
+	"strings"
+	"sync"
 
 	"golang.org/x/exp/slices"
 )
@@ -40,6 +42,49 @@ func statusWorkflow(init *RepoWorkerInitializer, done chan<- *WorkFlowResult) {
 	}
 statusEND:
 	done <- wfr
+}
+
+func findWorkflow(target string, init *RepoWorkerInitializer, name chan<- *SearchResult, wg *sync.WaitGroup) {
+	rw, err := init.NewRepoWorker()
+	if err != nil {
+		panic(err)
+	}
+	var remote string
+	remotes := rw.Remotes
+	fmtRemoteTarget := fmt.Sprintf("remotes/%s/%s", remote, target)
+	branches, err := rw.BranchList()
+	if err != nil {
+		name <- &SearchResult{rw.RepoInfo.Name, err.Error()}
+		goto findEND
+	}
+	for _, branch := range branches {
+		branch = strings.TrimPrefix(branch, "* ")
+		if branch == target {
+			name <- &SearchResult{rw.RepoInfo.Name, target}
+			goto findEND
+		}
+	}
+
+	if len(remotes) == 1 {
+		remote = remotes[0]
+	} else if slices.Contains(remotes, config.FCRemote) {
+		remote = config.FCRemote
+	} else {
+		name <- &SearchResult{rw.RepoInfo.Name, err.Error()}
+		goto findEND
+	}
+
+	err = rw.Update(remote)
+	if err != nil {
+		// name <- &SearchResult{rw.RepoInfo.Name, err.Error()}
+		goto findEND
+	}
+
+	if slices.Contains(branches, fmtRemoteTarget) {
+		name <- &SearchResult{rw.RepoInfo.Name, fmtRemoteTarget}
+	}
+findEND:
+	wg.Done()
 }
 
 func takeWorkflow(target string, init *RepoWorkerInitializer, done chan<- *WorkFlowResult) {
