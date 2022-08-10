@@ -46,6 +46,14 @@ func (ycli *yCLI) run() {
 			Description: "Rebases origin/<targetbranch> onto the tip of origin/main across all repos. All repositories that do not have the branch origin/<targetbranch> are updated to the tip of origin/main. repolist.json must exist.",
 		},
 		{
+			Name:        "find",
+			Usage:       "Searches all repositories for the chosen branch",
+			Action:      entryPoint,
+			Flags:       flags,
+			UsageText:   "yeet find <targetbranch>",
+			Description: "Searches all repos on their local and remotes for the target branch. Only print repos where something is found.",
+		},
+		{
 			Name:        "status",
 			Usage:       "Check the status of all repos",
 			Action:      entryPoint,
@@ -74,11 +82,13 @@ func entryPoint(cCtx *cli.Context) error {
 
 	switch cCtx.Command.FullName() {
 	case "refresh":
-		refreshAction(cCtx)
+		return refreshAction(cCtx)
 	case "take":
-		takeAction(cCtx)
+		return takeAction(cCtx)
+	case "find":
+		return findAction(cCtx)
 	case "status":
-		statusAction(cCtx)
+		return statusAction(cCtx)
 	default:
 		cli.ShowAppHelp(cCtx)
 	}
@@ -88,37 +98,37 @@ func entryPoint(cCtx *cli.Context) error {
 
 func refreshAction(cCtx *cli.Context) error {
 	if cCtx.NArg() > 0 {
-		fmt.Println("Refresh takes no arguments")
-		return nil
+		return fmt.Errorf("refresh takes no arguments")
 	}
-
 	workers.RefreshCmd()
-
 	return nil
 }
 
 func takeAction(cCtx *cli.Context) error {
 	if cCtx.NArg() != 1 {
-		fmt.Printf("Take needs 1 argument, got %d\n", cCtx.NArg())
-		return nil
+		return fmt.Errorf("take needs 1 argument, got %d", cCtx.NArg())
 	}
-
 	branchName := cCtx.Args().Get(0)
-
 	workers.SetupCmd()
 	workers.TakeCmd(branchName)
+	return nil
+}
 
+func findAction(cCtx *cli.Context) error {
+	if cCtx.NArg() != 1 {
+		return fmt.Errorf("take needs 1 argument, got %d", cCtx.NArg())
+	}
+	branchName := cCtx.Args().Get(0)
+	workers.SetupCmd()
+	workers.FindCmd(branchName)
 	return nil
 }
 
 func statusAction(cCtx *cli.Context) error {
 	if cCtx.NArg() > 0 {
-		fmt.Printf("Take needs no arguments")
-		return nil
+		return fmt.Errorf("take needs no arguments")
 	}
-
 	workers.SetupCmd()
 	workers.StatusCmd()
-
 	return nil
 }
