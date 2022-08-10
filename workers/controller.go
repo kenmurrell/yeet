@@ -142,9 +142,9 @@ func StatusCmd() {
 
 func (r *WorkFlowResult) Format() string {
 	var filler strings.Builder
-	var fillerlen = 31 - len(r.Message)
+	var fillerlen = 45 - len(r.Message)
 	for i := 0; i < fillerlen; i++ {
-		filler.WriteString(" ")
+		filler.WriteString(".")
 	}
 
 	return fmt.Sprintf(" %s %s%s%s\n", r.Status.ToString(), r.Message, filler.String(), r.RepoName)
