@@ -6,6 +6,33 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+type takeMessage struct {
+	OldBranch string
+	NewBranch string
+	OldHEAD   string
+	NewHEAD   string
+	Error     string
+	Addition  string
+}
+
+func (t *takeMessage) ToString() string {
+	if t.Error == "" {
+		return t.Error
+	}
+	str := fmt.Sprintf("[%s]", t.OldBranch)
+	if t.NewBranch != "" {
+		str += fmt.Sprintf("->[%s]", t.NewBranch)
+	}
+	str += fmt.Sprintf(": [%s]", t.OldHEAD)
+	if t.NewHEAD != "" {
+		str += fmt.Sprintf("->[%s]", t.NewHEAD)
+	}
+	if t.Addition != "" {
+		str += fmt.Sprintf(" %s", t.Addition)
+	}
+	return str
+}
+
 func statusWorkflow(init *RepoWorkerInitializer, done chan<- *WorkFlowResult) {
 	var wfr *WorkFlowResult
 	var localHEAD string
@@ -43,189 +70,184 @@ statusEND:
 }
 
 func takeWorkflow(target string, init *RepoWorkerInitializer, done chan<- *WorkFlowResult) {
+	var remote string
+	var localHEAD string
+	var remoteHEAD string
+	var branches []string
+	var remoteTarget string
+	var remoteMaster string
 	rw, err := init.NewRepoWorker()
 	if err != nil {
 		panic(err)
 	}
+	branch := rw.Branch
+	if branch == "" {
+		branch = "D_HEAD"
+	}
+	message := takeMessage{OldBranch: branch}
+	var status Status
+
 	// Stash current changes on branch
 	_ = rw.Stash()
 	// Select remote
-	remotes := rw.Remotes
-	var remote string
-	if len(remotes) == 1 {
-		remote = remotes[0]
-	} else if slices.Contains(remotes, config.FCRemote) {
+	if len(rw.Remotes) == 1 {
+		remote = rw.Remotes[0]
+	} else if slices.Contains(rw.Remotes, config.FCRemote) {
 		remote = config.FCRemote
 	} else {
-		done <- &WorkFlowResult{rw.RepoInfo.Name, FAILED, "Correct remote not found"}
-		return
+		status = FAILED
+		message.Error = "No suitable remote found."
+		goto takeEND
 	}
-	var wfr *WorkFlowResult
-	var message string
-	var localHEAD string
-	var remoteHEAD string
-	var branches []string
-	remoteTarget := fmt.Sprintf("%s/%s", remote, config.MasterBranch)
-	fmtRemoteTarget := fmt.Sprintf("remotes/%s/%s", remote, target)
-	remoteMasterBranch := fmt.Sprintf("%s/%s", remote, config.MasterBranch)
+	remoteTarget = fmt.Sprintf("%s/%s", remote, config.MasterBranch)
+	remoteMaster = fmt.Sprintf("%s/%s", remote, config.MasterBranch)
 
 	// Update info from remote
 	if err = rw.Update(remote); err != nil {
-		done <- &WorkFlowResult{rw.RepoInfo.Name, FAILED, fmt.Sprintf("Error performing remote update: %s", err.Error())}
+		status = FAILED
+		message.Error = err.Error()
 		goto takeEND
 	}
 
 	//CASE1: elif the target branch is the current branch
-	if rw.Branch == target {
+	if branch == target {
 		localHEAD, _ = rw.RevParseObject("HEAD")
+		message.OldHEAD = localHEAD
 		remoteHEAD, err = rw.RevParseUpstream(target)
 		if err != nil {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, CNFLCT, fmt.Sprintf("[%s]: [%s] (no remote)", rw.Branch, localHEAD)}
-			goto exitcase1
+			status = CNFLCT
+			message.Addition = "(no remote)"
+			goto takeEND
 		}
 		if localHEAD == remoteHEAD {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, PASSED, fmt.Sprintf("[%s]: [%s]", rw.Branch, localHEAD)}
+			status = PASSED
 		} else if rebaseSuccess, err := rw.Rebase(remoteTarget); err != nil {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, FAILED, err.Error()}
-			goto exitcase1
+			status = FAILED
+			message.Error = err.Error()
+			goto takeEND
 		} else if !rebaseSuccess {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, CNFLCT, fmt.Sprintf("[%s]: [%s]", rw.Branch, localHEAD)}
-			goto exitcase1
+			status = CNFLCT
+			goto takeEND
 		} else {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, PASSED, fmt.Sprintf("[%s]: [%s]->[%s]", rw.Branch, localHEAD, remoteHEAD)}
+			status = PASSED
+			message.NewHEAD = remoteHEAD
 		}
 		// If currently on master, no need to rebase on master
-		if rw.Branch == config.MasterBranch {
-			goto exitcase1
+		if branch == config.MasterBranch {
+			goto takeEND
 		}
-		if rebaseSuccess, err := rw.Rebase(remoteMasterBranch); err != nil {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, FAILED, err.Error()}
+		if rebaseSuccess, err := rw.Rebase(remoteMaster); err != nil {
+			status = FAILED
+			message.Error = err.Error()
 		} else if !rebaseSuccess {
-			wfr.Status = CNFLCT
+			status = CNFLCT
 		} else {
-			newLocalHEAD, _ := rw.RevParseObject("HEAD")
-			wfr.Message = fmt.Sprintf("[%s]: [%s]->[%s]", rw.Branch, localHEAD, newLocalHEAD)
+			status = PASSED
+			message.NewHEAD, _ = rw.RevParseObject("HEAD")
 		}
-	exitcase1:
-		done <- wfr
-		return
+		goto takeEND
 	}
 
 	//load branches
 	branches, err = rw.BranchList()
 	if err != nil {
-		done <- &WorkFlowResult{rw.RepoInfo.Name, FAILED, fmt.Sprintf("Error getting branch names: %s", err.Error())}
+		status = FAILED
+		message.Error = err.Error()
 		goto takeEND
 	}
 
 	//CASE2: elif the target branch exists locally
 	if slices.Contains(branches, target) {
-		prevBranch := rw.Branch
-		if prevBranch == "" {
-			prevBranch = "DETACHED_HEAD"
-		}
 		if err := rw.CheckoutLocal(target); err != nil {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, FAILED, fmt.Sprintf("Error checking out %s: %s", target, err.Error())}
-			goto exitcase2
+			status = FAILED
+			message.Error = err.Error()
+			goto takeEND
 		}
-		message = fmt.Sprintf("[%s]->[%s]", prevBranch, target)
 		localHEAD, _ = rw.RevParseObject("HEAD")
+		message.OldHEAD = localHEAD
 		remoteHEAD, err = rw.RevParseUpstream(target)
 		if err != nil {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, CNFLCT, fmt.Sprintf("%s: [%s] (no remote)", message, localHEAD)}
-			goto exitcase2
+			status = CNFLCT
+			message.OldHEAD = localHEAD
+			message.Addition = "(no remote)"
+			goto takeEND
 		}
 		if localHEAD == remoteHEAD {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, PASSED, fmt.Sprintf("%s: [%s]", message, localHEAD)}
+			status = PASSED
 		} else if rebaseSuccess, err := rw.Rebase(remoteTarget); err != nil {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, FAILED, err.Error()}
-			goto exitcase2
+			status = FAILED
+			message.Error = err.Error()
+			goto takeEND
 		} else if !rebaseSuccess {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, CNFLCT, fmt.Sprintf("%s: [%s]", message, localHEAD)}
-			goto exitcase2
+			status = CNFLCT
+			goto takeEND
 		} else {
-			newLocalHEAD, _ := rw.RevParseObject("HEAD")
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, PASSED, fmt.Sprintf("%s: [%s]->[%s]", message, localHEAD, newLocalHEAD)}
+			status = PASSED
+			message.NewHEAD = remoteHEAD
 		}
 		// If currently on master, no need to rebase on master
-		if rw.Branch == config.MasterBranch {
-			goto exitcase2
+		if branch == config.MasterBranch {
+			goto takeEND
 		}
-		if rebaseSuccess, err := rw.Rebase(remoteMasterBranch); err != nil {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, FAILED, err.Error()}
+		if rebaseSuccess, err := rw.Rebase(remoteMaster); err != nil {
+			status = FAILED
+			message.Error = err.Error()
 		} else if !rebaseSuccess {
-			wfr.Status = CNFLCT
+			status = CNFLCT
 		} else {
-			newLocalHEAD, _ := rw.RevParseObject("HEAD")
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, PASSED, fmt.Sprintf("%s: [%s]->[%s]", message, localHEAD, newLocalHEAD)}
+			status = PASSED
+			message.NewHEAD, _ = rw.RevParseObject("HEAD")
 		}
-	exitcase2:
-		done <- wfr
-		return
-	}
-
-	//CASE3: elif the target branch only exists remotely
-	if slices.Contains(branches, fmtRemoteTarget) {
-		prevBranch := rw.Branch
-		if prevBranch == "" {
-			prevBranch = "DETACHED_HEAD"
-		}
+	} else if slices.Contains(branches, fmt.Sprintf("remotes/%s", remoteTarget)) {
+		//CASE3: elif the target branch only exists remotely
 		if err := rw.CheckoutRemote(target, remote); err != nil {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, FAILED, fmt.Sprintf("Cannot checkout remote branch %s: %s", target, err.Error())}
-			goto exitcase3
+			status = FAILED
+			message.Error = err.Error()
+			goto takeEND
 		}
-		message = fmt.Sprintf("[%s]->[%s]", prevBranch, target)
-		localHEAD, _ = rw.RevParseObject("HEAD")
-		if rebaseSuccess, err := rw.Rebase(remoteMasterBranch); err != nil {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, FAILED, err.Error()}
+		message.NewBranch = remoteTarget
+		message.OldHEAD, _ = rw.RevParseObject("HEAD")
+		if rebaseSuccess, err := rw.Rebase(remoteMaster); err != nil {
+			status = FAILED
+			message.Error = err.Error()
 		} else if !rebaseSuccess {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, CNFLCT, fmt.Sprintf("%s: [%s]", message, localHEAD)}
+			status = CNFLCT
 		} else {
-			newLocalHEAD, _ := rw.RevParseObject("HEAD")
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, PASSED, fmt.Sprintf("%s: [%s]->[%s]", message, localHEAD, newLocalHEAD)}
+			status = PASSED
+			message.NewHEAD, _ = rw.RevParseObject("HEAD")
 		}
-	exitcase3:
-		done <- wfr
-		return
-	}
-
-	//CASE4: elif the repo has no access to the target branch
-	if true {
-		prevBranch := rw.Branch
-		if prevBranch == "" {
-			prevBranch = "DETACHED_HEAD"
-		}
-		if rw.Branch == config.MasterBranch {
-			message = fmt.Sprintf("[%s]", config.MasterBranch)
-		} else {
+	} else {
+		//CASE4: elif the repo has no access to the target branch
+		if branch != config.MasterBranch {
 			if err := rw.CheckoutLocal(config.MasterBranch); err != nil {
-				wfr = &WorkFlowResult{rw.RepoInfo.Name, FAILED, fmt.Sprintf("Error checking out %s: %s", target, err.Error())}
-				goto exitcase4
+				status = FAILED
+				message.Error = err.Error()
+				goto takeEND
 			}
-			message = fmt.Sprintf("[%s]->[%s]", prevBranch, config.MasterBranch)
+			message.NewBranch = config.MasterBranch
 		}
-
 		localHEAD, _ = rw.RevParseObject("HEAD")
+		message.OldHEAD = localHEAD
 		remoteHEAD, err = rw.RevParseUpstream(config.MasterBranch)
 		if err != nil {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, CNFLCT, fmt.Sprintf("Cannot update to remote: %s", err.Error())}
-			goto exitcase4
+			status = FAILED
+			message.Error = err.Error()
+			goto takeEND
 		}
 		if localHEAD == remoteHEAD {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, PASSED, fmt.Sprintf("%s: [%s]", message, localHEAD)}
-		} else if rebaseSuccess, err := rw.Rebase(remoteMasterBranch); err != nil {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, FAILED, err.Error()}
+			status = PASSED
+		} else if rebaseSuccess, err := rw.Rebase(remoteMaster); err != nil {
+			status = FAILED
+			message.Error = err.Error()
 		} else if !rebaseSuccess {
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, CNFLCT, fmt.Sprintf("%s: [%s]", message, localHEAD)}
+			status = CNFLCT
 		} else {
-			newLocalHEAD, _ := rw.RevParseObject("HEAD")
-			wfr = &WorkFlowResult{rw.RepoInfo.Name, PASSED, fmt.Sprintf("%s: [%s]->[%s]", message, localHEAD, newLocalHEAD)}
+			status = PASSED
+			message.NewHEAD, _ = rw.RevParseObject("HEAD")
 		}
-	exitcase4:
-		done <- wfr
-		return
 	}
 
 takeEND:
+	done <- &WorkFlowResult{rw.RepoInfo.Name, status, message.ToString()}
 	return
 }
